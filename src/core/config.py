@@ -7,6 +7,13 @@ class Settings(BaseSettings):
     APP_DEBUG: bool = True
     APP_VERSION: str = "1.0.0"
 
+    # Redis
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_PASSWORD: str = "123456"
+    REDIS_DB: int = 0
+
+    # MySQL
     DB_HOST: str = "127.0.0.1"
     DB_PORT: int = 3306
     DB_USER: str = "root"

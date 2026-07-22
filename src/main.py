@@ -9,6 +9,8 @@ from src.infra.database import engine
 from contextlib import asynccontextmanager
 
 from src.modules.user.api import router as api_router
+from src.modules.captcha.api import router as captcha_router
+from src.modules.auth.api import router as auth_router
 
 
 
@@ -50,12 +52,14 @@ def create_app() -> FastAPI:
 
     # 路由配置
     app.include_router(api_router,prefix="/api/v1")
+    app.include_router(captcha_router,prefix="/api/v1")
+    app.include_router(auth_router,prefix="/api/v1")
 
     return app
 
 app = create_app()
 
 # 健康检查路由
-@app.get("/health") # type: ignore
+@app.get("/health",tags=["系统API"],summary="健康检查") # type: ignore
 async def root():
     return {"status": "ok"}
