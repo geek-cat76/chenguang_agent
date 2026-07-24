@@ -1,4 +1,4 @@
-from sqlalchemy import delete
+from sqlalchemy import delete, func, or_
 from typing import TypeVar, Generic, Type, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +19,35 @@ class BaseRepository(Generic[T]):
         stmt = select(self.model).offset(offset).limit(limit)
         result = await self.db.execute(stmt)
         return result.scalars().all()
+
+    async def get_page(
+        self,
+        offset: int = 0,
+        limit: int = 20,
+        keyword: str | None = None,
+        search_fields: list[str] | None = None,
+    ) -> tuple[list[T], int]:
+        """通用分页 + 模糊搜索，返回数据列表和总条数。"""
+        stmt = select(self.model)
+
+        if keyword and search_fields:
+            conditions = []
+            for field_name in search_fields:
+                column = getattr(self.model, field_name, None)
+                if column is not None:
+                    conditions.append(column.like(f"%{keyword}%"))
+            if conditions:
+                stmt = stmt.where(or_(*conditions))
+
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total_result = await self.db.execute(count_stmt)
+        total = total_result.scalar_one()
+
+        stmt = stmt.offset(offset).limit(limit).order_by(self.model.id.desc())
+        result = await self.db.execute(stmt)
+        items = list(result.scalars().all())
+
+        return items, total
 
     async def create(self, obj: T) -> T:
         self.db.add(obj)

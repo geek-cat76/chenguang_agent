@@ -5,6 +5,8 @@ from sqlalchemy import select
 from src.modules.permission.model import Permission
 
 class PermissionRepository(BaseRepository[Permission]):
+    SEARCH_FIELDS = ["code", "name"]
+
     def __init__(self, db: AsyncSession):
         super().__init__(Permission, db)
 
@@ -18,8 +20,15 @@ class PermissionRepository(BaseRepository[Permission]):
         result = await self.db.scalars(select(Permission).where(Permission.id.in_(ids)))
         return result.all()
 
-    # 分页搜索
-    async def search_page(self, offset: int,
-                          limit: int,
-                          keyword: str | None) -> tuple[list[Permission], int]:
-        return await self.get_page(offset, limit, keyword, self.SEARCH_FIELDS)
+    async def search_page(
+        self,
+        offset: int,
+        limit: int,
+        keyword: str | None,
+    ) -> tuple[list[Permission], int]:
+        return await self.get_page(
+            offset=offset,
+            limit=limit,
+            keyword=keyword,
+            search_fields=self.SEARCH_FIELDS,
+        )

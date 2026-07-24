@@ -2,10 +2,10 @@ from src.modules.user.schema import UserWithRolesRead
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.infra.database import get_db
-from src.core.base_schema import ResponseSchema
+from src.core.base_schema import PageResult, ResponseSchema
 from src.modules.user.schema import UserCreate, UserRead
 from src.modules.user.service import UserService
-from src.core.deps import get_current_user, require_permission
+from src.core.deps import PageParams, get_current_user
 from src.modules.user.model import User
 
 
@@ -31,17 +31,6 @@ async def get_me(current_user: User = Depends(get_current_user)):
     return ResponseSchema(data=UserRead.model_validate(current_user))
 
 
-@router.get("/list", response_model=ResponseSchema[list[UserRead]], summary="测试权限-获取用户列表")
-async def list_users_test(
-    offset: int = 0,
-    limit: int = 100,
-    current_user: User = Depends(require_permission("user:list")),
-    svc: UserService = Depends(get_user_service),
-):
-    users = await svc.list_users(offset, limit)
-    return ResponseSchema(data=[UserRead.model_validate(u) for u in users])
-
-
 @router.get("/{user_id}", response_model=ResponseSchema[UserRead], summary="获取用户详情")
 async def get_user(
     user_id: int,
@@ -51,14 +40,14 @@ async def get_user(
     return ResponseSchema(data=UserRead.model_validate(user))
 
 
-@router.get("", response_model=ResponseSchema[list[UserRead]], summary="获取用户列表")
+@router.get("", response_model=ResponseSchema[PageResult[UserRead]], summary="获取用户列表")
 async def list_users(
-    offset: int = 0,
-    limit: int = 100,
+    params: PageParams = Depends(),
     svc: UserService = Depends(get_user_service),
 ):
-    users = await svc.list_users(offset, limit)
-    return ResponseSchema(data=[UserRead.model_validate(u) for u in users])
+    page_result = await svc.list_users(params)
+    page_result.items = [UserRead.model_validate(user) for user in page_result.items]
+    return ResponseSchema(data=page_result)
 
 
 # PUT   /api/v1/users/{user_id}/roles   给用户分配角色

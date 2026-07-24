@@ -224,3 +224,4 @@ docker/docker
 
 # test
 *.http
+.DS_Store

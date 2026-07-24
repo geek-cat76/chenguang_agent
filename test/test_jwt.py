@@ -15,4 +15,3 @@ def test_token():
     assert payload["is_superuser"] == False
 
 
-

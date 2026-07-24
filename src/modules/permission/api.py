@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
-from src.core.base_schema import ResponseSchema
+from src.core.base_schema import PageResult, ResponseSchema
+from src.core.deps import PageParams
 from src.infra.database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.modules.permission.schema import PermissionCreate, PermissionRead, PermissionUpdate
@@ -16,11 +17,15 @@ async def get_permission(permission_id: int, service: PermissionService = Depend
     permission = await service.get_permission(permission_id)
     return ResponseSchema(data=PermissionRead.model_validate(permission))
 
-@router.get("/", response_model=ResponseSchema[list[PermissionRead]], summary="获取所有权限列表")
-async def list_permissions(service: PermissionService = Depends(get_permission_service)):
-    """获取所有权限"""
-    permissions = await service.list_permissions()
-    return ResponseSchema(data=[PermissionRead.model_validate(p) for p in permissions])
+@router.get("/", response_model=ResponseSchema[PageResult[PermissionRead]], summary="获取权限列表")
+async def list_permissions(
+    params: PageParams = Depends(),
+    service: PermissionService = Depends(get_permission_service),
+):
+    """分页获取权限，支持按权限码和名称搜索。"""
+    page_result = await service.list_permissions(params)
+    page_result.items = [PermissionRead.model_validate(permission) for permission in page_result.items]
+    return ResponseSchema(data=page_result)
 
 @router.post("/", response_model=ResponseSchema[PermissionRead], summary="创建权限")
 async def create_permission(data: PermissionCreate, 

@@ -3,6 +3,8 @@ from src.infra.database import AsyncSession
 from src.modules.permission.model import Permission
 from src.modules.permission.repository import PermissionRepository
 from src.modules.permission.schema import PermissionCreate, PermissionUpdate
+from src.core.base_schema import PageResult
+from src.core.deps import PageParams
 
 class PermissionService:
     def __init__(self, db: AsyncSession):
@@ -31,9 +33,18 @@ class PermissionService:
             raise BizException(code=404, message="权限不存在")
         return permission
 
-    async def list_permissions(self) -> list[Permission]:
-        # 调用 repo.get_all()
-        return await self.repo.get_all()
+    async def list_permissions(self, params: PageParams) -> PageResult:
+        items, total = await self.repo.search_page(
+            offset=params.offset,
+            limit=params.page_size,
+            keyword=params.keyword,
+        )
+        return PageResult(
+            items=items,
+            total=total,
+            page=params.page,
+            page_size=params.page_size,
+        )
 
     async def update_permission(self, permission_id: int, data: PermissionUpdate) -> Permission:
         # 1. 查找权限，不存在抛异常

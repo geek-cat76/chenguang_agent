@@ -5,6 +5,8 @@ from src.modules.role.schema import RoleCreate
 from src.modules.permission.repository import PermissionRepository
 from src.modules.role.repository import RoleRepository
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.core.base_schema import PageResult
+from src.core.deps import PageParams
 
 class RoleService:
     def __init__(self, db: AsyncSession):
@@ -29,9 +31,18 @@ class RoleService:
             raise BizException(f"角色 {role_id} 不存在")
         return role
 
-    async def list_roles(self) -> list[Role]:
-        roles = await self.repo.get_all()
-        return roles
+    async def list_roles(self, params: PageParams) -> PageResult:
+        items, total = await self.repo.search_page(
+            offset=params.offset,
+            limit=params.page_size,
+            keyword=params.keyword,
+        )
+        return PageResult(
+            items=items,
+            total=total,
+            page=params.page,
+            page_size=params.page_size,
+        )
 
     async def update_role(self, role_id: int, data: RoleUpdate) -> Role:
         # 查不到抛异常

@@ -5,6 +5,8 @@ from src.modules.user.schema import UserCreate
 from src.modules.user.repository import UserRepository
 from src.utils.password_utils import hash_password
 from src.modules.role.repository import RoleRepository
+from src.core.base_schema import PageResult
+from src.core.deps import PageParams
 
 
 class UserService:
@@ -31,8 +33,18 @@ class UserService:
             raise BizException(code=404, message="用户不存在")
         return user
 
-    async def list_users(self, offset: int = 0, limit: int = 100):
-        return await self.repo.get_all(offset=offset, limit=limit)
+    async def list_users(self, params: PageParams) -> PageResult:
+        items, total = await self.repo.search_page(
+            offset=params.offset,
+            limit=params.page_size,
+            keyword=params.keyword,
+        )
+        return PageResult(
+            items=items,
+            total=total,
+            page=params.page,
+            page_size=params.page_size,
+        )
 
     async def assign_roles(self, user_id: int, role_ids: list[int]) -> User:
         
