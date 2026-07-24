@@ -1,3 +1,4 @@
+from sqlalchemy import delete
 from typing import TypeVar, Generic, Type, Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,3 +34,8 @@ class BaseRepository(Generic[T]):
     async def delete(self, obj: T) -> None:
         await self.db.delete(obj)
         await self.db.flush()
+
+    
+    async def delete_by_id(self, id: int) -> None:
+        stmt = delete(self.model).where(self.model.id == id)
+        await self.db.execute(stmt)

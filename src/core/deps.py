@@ -23,3 +23,33 @@ async def get_current_user(
         raise BizException(code=401, message="账号已被禁用")
 
     return user
+
+
+def require_permission(permission_code: str):
+    """
+    返回一个 FastAPI 依赖函数，用于校验当前用户是否拥有指定权限。
+
+    使用方式：Depends(require_permission("user:list"))
+    """
+    async def _check(
+        current_user: User = Depends(get_current_user),
+    ) -> User:
+        # 1. 超级管理员直接放行
+        if current_user.is_superuser:
+            return current_user
+
+        # 2. 收集用户所有权限 code
+        #    遍历 current_user.roles，再遍历每个 role.permissions
+        #    收集所有 permission.code 到一个 set 中
+        user_permissions = set()
+        for role in current_user.roles:
+            for perm in role.permissions:
+                user_permissions.add(perm.code)
+
+        # 3. 检查目标权限是否在集合中
+        if permission_code not in user_permissions:
+            raise BizException(code=403, message=f"无权限: {permission_code}")
+
+        return current_user
+
+    return _check

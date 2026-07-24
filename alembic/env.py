@@ -11,6 +11,10 @@ from alembic import context
 from src.core.config import get_settings
 from src.core.base_model import Base
 import src.modules.user.model 
+import src.modules.role.model
+import src.modules.permission.model
+
+
 
 """
     Alembic 配置文件
