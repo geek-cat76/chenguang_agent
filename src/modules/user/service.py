@@ -1,3 +1,6 @@
+from functools import partial
+
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.exceptions import BizException
 from src.modules.user.model import User
@@ -7,12 +10,16 @@ from src.utils.password_utils import hash_password
 from src.modules.role.repository import RoleRepository
 from src.core.base_schema import PageResult
 from src.core.deps import PageParams
+from src.utils.permission_cache import PermissionCache
+from src.infra.database import add_after_commit_callback
 
 
 class UserService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis: Redis | None = None):
+        self.db = db
         self.repo = UserRepository(db)
         self.role_repo = RoleRepository(db)
+        self.permission_cache = PermissionCache(redis) if redis else None
 
     async def create_user(self, data: UserCreate) -> User:
         if await self.repo.get_by_username(data.username):
@@ -65,6 +72,15 @@ class UserService:
         
         # 5. flush + refresh
         user = await self.repo.update(user)
+
+        if self.permission_cache:
+            # Delete before commit so a Redis failure rolls back the DB change,
+            # then delete again after commit to remove any concurrent stale fill.
+            await self.permission_cache.delete_user_cache(user_id)
+            add_after_commit_callback(
+                self.db,
+                partial(self.permission_cache.delete_user_cache, user_id),
+            )
         
         # 6. 返回 user
         return user

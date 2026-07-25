@@ -1,18 +1,30 @@
+from functools import partial
+
+from redis.asyncio import Redis
+from sqlalchemy import select
 from src.core.exceptions import BizException
 from src.modules.role.schema import RoleUpdate
-from src.modules.role.model import Role
+from src.modules.role.model import Role, user_roles
 from src.modules.role.schema import RoleCreate
 from src.modules.permission.repository import PermissionRepository
 from src.modules.role.repository import RoleRepository
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.base_schema import PageResult
 from src.core.deps import PageParams
+from src.utils.permission_cache import PermissionCache
+from src.infra.database import add_after_commit_callback
 
 class RoleService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis: Redis | None = None):
         self.repo = RoleRepository(db)
         self.permission_repo = PermissionRepository(db)
-    
+        self.db = db
+        self.permission_cache = PermissionCache(redis) if redis else None
+
+    async def _get_affected_user_ids(self, role_id: int) -> list[int]:
+        stmt = select(user_roles.c.user_id).where(user_roles.c.role_id == role_id)
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
     async def create_role(self, data: RoleCreate) -> Role:
         # 检查 code 是否已存在
@@ -55,7 +67,17 @@ class RoleService:
         return role
 
     async def delete_role(self, role_id: int) -> None:
+        affected_user_ids = await self._get_affected_user_ids(role_id)
         await self.repo.delete_by_id(role_id)
+        if self.permission_cache and affected_user_ids:
+            await self.permission_cache.delete_user_cache_batch(affected_user_ids)
+            add_after_commit_callback(
+                self.db,
+                partial(
+                    self.permission_cache.delete_user_cache_batch,
+                    affected_user_ids,
+                ),
+            )
         return None
 
     async def assign_permissions(self, role_id: int, permission_ids: list[int]) -> Role:
@@ -76,5 +98,15 @@ class RoleService:
 
         # 5. flush + refresh
         await self.repo.update(role)
+        affected_user_ids = await self._get_affected_user_ids(role_id)
+        if self.permission_cache and affected_user_ids:
+            await self.permission_cache.delete_user_cache_batch(affected_user_ids)
+            add_after_commit_callback(
+                self.db,
+                partial(
+                    self.permission_cache.delete_user_cache_batch,
+                    affected_user_ids,
+                ),
+            )
         # 6. 返回更新后的 role（会自动带上新的 permissions）
         return role

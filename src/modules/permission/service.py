@@ -1,14 +1,38 @@
+from functools import partial
+
 from src.core.exceptions import BizException
-from src.infra.database import AsyncSession
+from redis.asyncio import Redis
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.modules.permission.model import Permission
 from src.modules.permission.repository import PermissionRepository
 from src.modules.permission.schema import PermissionCreate, PermissionUpdate
 from src.core.base_schema import PageResult
 from src.core.deps import PageParams
+from src.modules.role.model import role_permissions, user_roles
+from src.utils.permission_cache import PermissionCache
+from src.infra.database import add_after_commit_callback
 
 class PermissionService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, redis: Redis | None = None):
         self.repo = PermissionRepository(db)
+        self.db = db
+        self.permission_cache = PermissionCache(redis) if redis else None
+
+    async def _get_affected_user_ids(self, permission_id: int) -> list[int]:
+        stmt = (
+            select(user_roles.c.user_id)
+            .select_from(
+                user_roles.join(
+                    role_permissions,
+                    role_permissions.c.role_id == user_roles.c.role_id,
+                )
+            )
+            .where(role_permissions.c.permission_id == permission_id)
+            .distinct()
+        )
+        result = await self.db.execute(stmt)
+        return list(result.scalars().all())
 
     async def create_permission(self, data: PermissionCreate) -> Permission:
         # 1. 检查 code 是否已存在，已存在则抛 BizException
@@ -65,6 +89,17 @@ class PermissionService:
         permission = await self.get_permission(permission_id)
         if not permission:
             raise BizException(code=404, message="权限不存在")
+        affected_user_ids = await self._get_affected_user_ids(permission_id)
+
         # 2. 调用 repo.delete()
         await self.repo.delete(permission)
+        if self.permission_cache and affected_user_ids:
+            await self.permission_cache.delete_user_cache_batch(affected_user_ids)
+            add_after_commit_callback(
+                self.db,
+                partial(
+                    self.permission_cache.delete_user_cache_batch,
+                    affected_user_ids,
+                ),
+            )
         return None

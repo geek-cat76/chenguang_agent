@@ -1,7 +1,9 @@
 from src.modules.user.schema import UserWithRolesRead
 from fastapi import APIRouter, Depends
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.infra.database import get_db
+from src.infra.redis_cache import get_redis_client
 from src.core.base_schema import PageResult, ResponseSchema
 from src.modules.user.schema import UserCreate, UserRead
 from src.modules.user.service import UserService
@@ -12,8 +14,11 @@ from src.modules.user.model import User
 router = APIRouter(prefix="/users", tags=["用户API"])
 
 
-def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
-    return UserService(db)
+def get_user_service(
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis_client),
+) -> UserService:
+    return UserService(db, redis)
 
 
 @router.post("", response_model=ResponseSchema[UserRead], summary="创建用户")

@@ -1,3 +1,5 @@
+from collections.abc import Awaitable, Callable
+
 from sqlalchemy.ext.asyncio import create_async_engine,async_sessionmaker,AsyncSession
 from src.core.config import get_settings
 
@@ -22,6 +24,29 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 
+_AFTER_COMMIT_CALLBACKS_KEY = "after_commit_callbacks"
+AfterCommitCallback = Callable[[], Awaitable[None]]
+
+
+def add_after_commit_callback(
+    session: AsyncSession,
+    callback: AfterCommitCallback,
+) -> None:
+    """Register async work that must run only after a successful commit."""
+    callbacks = session.info.setdefault(_AFTER_COMMIT_CALLBACKS_KEY, [])
+    callbacks.append(callback)
+
+
+async def run_after_commit_callbacks(session: AsyncSession) -> None:
+    callbacks = session.info.pop(_AFTER_COMMIT_CALLBACKS_KEY, [])
+    for callback in callbacks:
+        await callback()
+
+
+def clear_after_commit_callbacks(session: AsyncSession) -> None:
+    session.info.pop(_AFTER_COMMIT_CALLBACKS_KEY, None)
+
+
 async def get_db() -> AsyncSession: # type: ignore
     """
     FastAPI Depends 注入, 自动提交和异常回滚数据库
@@ -32,6 +57,9 @@ async def get_db() -> AsyncSession: # type: ignore
         try:
             yield session # type: ignore
             await session.commit()
-        except Exception as e:
+        except Exception:
+            clear_after_commit_callbacks(session)
             await session.rollback()
-            raise e
+            raise
+
+        await run_after_commit_callbacks(session)
