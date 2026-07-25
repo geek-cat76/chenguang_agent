@@ -2,7 +2,7 @@
 
 > 本文档用于让后续 AI 或开发者快速理解并修改本项目。内容基于 **2026-07-26** 工作区的实际源码、迁移、配置、测试和 Git 状态整理，而不只是 README。
 >
-> 重要边界：用户已明确约定 **`app/` 目录承载全部前端代码**。当前工作区中的 `app/` 是空目录，而且空目录没有被 Git 跟踪；从仓库重新 clone 后甚至不会自动出现。当前仓库实际实现的是后端基础能力，尚无前端工程。
+> 重要边界：用户已明确约定 **`app/` 目录承载全部前端代码**。2026-07-26 已在该目录建立 React 19 + TypeScript + Vite 管理控制台；后续前端修改必须继续留在 `app/`，不能散落到后端 `src/`。
 
 ---
 
@@ -10,11 +10,11 @@
 
 - 仓库名：`chenguang_agent`
 - 本地应用名：`晨光Agent平台`（来自被 `.gitignore` 忽略的 `.env`）
-- 当前分支/基线：`main`，HEAD 为 `e8b3c3d`（提交说明：`添加分页查找`）
+- 当前分支/基线：`main`，文档更新时 HEAD 为 `bc31bc0`（提交说明：`redis 缓存`）
 - 许可证：Apache License 2.0
-- 当前产品形态：异步 FastAPI 后端脚手架，已实现用户、图形验证码、登录、JWT、角色、权限和 RBAC 权限缓存。
+- 当前产品形态：异步 FastAPI 后端 + React 管理控制台。后端已实现用户、图形验证码、登录、JWT、角色、权限和 RBAC 权限缓存；前端已实现对应的登录、工作台、用户、角色、权限和个人信息页面。
 - 当前没有任何 AI/Agent、模型调用、知识库、对话或工作流实现；项目名称中的 “Agent” 还没有对应业务代码。
-- 当前没有前端源码、`package.json`、前端构建工具或静态资源；`app/` 只是本地空目录。
+- 前端使用 React 19、TypeScript、Vite、React Router、TanStack Query、Axios 和 Ant Design，依赖由 npm lockfile 固定。
 - 数据层：MySQL 8.4 + SQLAlchemy 2 异步 ORM + Alembic。
 - 缓存层：Redis，存验证码以及用户的角色/权限快照。
 - MinIO 已在 Docker Compose 中声明，但代码尚未使用，也没有 MinIO Python SDK。
@@ -24,7 +24,7 @@
 当前最重要的接手事实：
 
 1. **绝大多数业务接口目前没有鉴权。** 只有 `GET /api/v1/users/me` 使用了 `get_current_user`；`require_permission(...)` 虽已实现，但没有挂到任何 API 上。
-2. **正在开发的权限缓存改动尚未提交。** 不要回退或覆盖这些工作区改动。
+2. **权限缓存已进入当前基线。** 修改鉴权、事务或 RBAC 关系前仍需理解双删与提交后回调，不要破坏缓存一致性。
 3. **依赖清单不完整。** 源码直接依赖 `redis`、`bcrypt`、`captcha`、`PyJWT`，但它们不在 `requirements.txt` 中。
 4. **完整测试目前不能通过。** 测试收集会因当前环境缺少 `bcrypt` 中断；单独运行 JWT 测试时，一个写死的 token 已过期。
 5. **JWT 密钥硬编码在源码。** 在继续做鉴权功能前，应优先迁移到环境变量并轮换密钥。
@@ -35,7 +35,18 @@
 
 ```text
 chenguang_agent/
-├── app/                         # 全部前端代码的唯一目录；当前为空且未被 Git 跟踪
+├── app/                         # 全部前端代码的唯一目录；React 19 + TypeScript + Vite
+│   ├── src/
+│   │   ├── auth/                # 登录态上下文和当前用户查询
+│   │   ├── components/          # 品牌、页面标题、受保护路由
+│   │   ├── layouts/             # 后台侧栏和顶栏布局
+│   │   ├── pages/               # 登录、工作台、用户、角色、权限、个人信息
+│   │   ├── services/            # Axios、统一响应解析、API、Token 存储
+│   │   ├── styles/              # 响应式全局样式
+│   │   └── types/               # OpenAPI 对应的 TypeScript 类型
+│   ├── package.json             # 前端命令与直接依赖
+│   ├── package-lock.json        # npm 锁文件
+│   └── vite.config.ts           # React 插件及后端开发代理
 ├── src/                         # FastAPI 后端源码
 │   ├── main.py                  # 应用工厂、生命周期、中间件/异常/路由注册、健康检查
 │   ├── core/                    # 配置、基类、通用依赖、异常、日志
@@ -59,7 +70,7 @@ chenguang_agent/
 │   └── utils/
 │       ├── jwt_utils.py         # JWT 编解码与 OAuth2 Bearer 定义
 │       ├── password_utils.py    # bcrypt 哈希/校验
-│       └── permission_cache.py  # 当前未提交的 RBAC Redis 缓存实现
+│       └── permission_cache.py  # RBAC Redis 缓存实现
 ├── alembic/                     # 数据库迁移环境及版本脚本
 ├── docker/docker-compose.yaml   # MySQL、Redis、MinIO；不包含后端服务
 ├── test/                        # pytest 测试
@@ -98,6 +109,8 @@ schema.py 用于 API 输入输出；main.py 负责注册各模块 router。
 
 | 类别 | 当前实现 |
 | --- | --- |
+| 前端 | React `19.2.8`、TypeScript `7.0.2`、Vite `8.1.5`、React Router `7.18.1` |
+| 前端数据/UI | TanStack Query `5.101.4`、Axios `1.18.1`、Ant Design `6.5.2` |
 | Web | FastAPI `0.135.1`、Starlette `1.3.1`、Uvicorn `0.51.0` |
 | 数据校验/配置 | Pydantic `2.13.4`、pydantic-settings `2.14.2`、email-validator |
 | ORM/迁移 | SQLAlchemy `2.0.48`、Alembic `1.18.5`、asyncmy `0.2.11` |
@@ -614,34 +627,34 @@ async def example(
 
 ### 11.1 当前状态
 
-- `app/` 当前为空。
-- Git 从不跟踪空目录，`git ls-files` 和历史提交里都没有任何 `app/` 文件。
-- 没有确定 React/Vue/Svelte 等技术栈。
-- 没有 `package.json`、lockfile、TypeScript、构建配置、页面、组件或 API client。
-- 后端没有 CORS 中间件，也没有托管前端静态文件。
+- `app/` 已建立独立 npm 工程，要求 Node.js `^20.19.0` 或 `>=22.12.0`。
+- 页面：`/login`、`/dashboard`、`/users`、`/roles`、`/permissions`、`/profile`，以及 404 页面。
+- `AuthProvider` 管理 access token 与当前用户；受保护路由无 token 时跳转登录页。
+- token 当前写入 `localStorage` 的 `chenguang_access_token`，Axios 请求拦截器自动添加 Bearer 头。该方案适配现有纯 Header 后端，但需承担 XSS 读取风险；若后端以后支持 HttpOnly Cookie，应重新评估。
+- TanStack Query 管理分页列表、详情、选项和 mutation 后缓存失效。
+- `services/http.ts` 同时处理 HTTP 错误和 `{code,message,data}` 业务错误；业务 code 401 会清除本地 token。
+- 登录失败后刷新验证码，因为后端会先消费验证码再校验用户名和密码。
+- Vite 开发服务器运行于 `5173`，把 `/api` 和 `/health` 代理到 `VITE_API_PROXY_TARGET`（默认 `http://localhost:8000`），开发阶段不依赖 CORS。
+- 生产构建输出到 `app/dist/`，当前仓库尚未提供 Nginx、静态文件托管或前端容器配置。
 
-因此，后续 AI 不应声称“修改现有前端”，而应先确认是否需要新建前端工程。任何新增前端代码都必须放在 `app/` 下；不要把前端文件散落到根目录或 `src/`。
+### 11.2 API 映射中的特殊约束
 
-### 11.2 新建前端前必须确定
+1. 用户分配角色必须发送原始数组 `[1,2]`，不能包装为对象。
+2. 角色分配权限必须发送 `{permission_ids:[1,2]}`。
+3. 权限列表/创建使用 `/api/v1/permissions/` 尾斜杠，避免重定向。
+4. `/health` 是原始 JSON，不使用统一响应包装，因此由 `requestRaw` 处理。
+5. Dashboard 为展示统计会分别请求用户、角色、权限列表的第一页并读取 `total`。
+6. 页面上的管理入口不等于授权；后端仍必须把管理接口接入 `require_permission`。
 
-1. 技术栈和包管理器。
-2. 开发服务器端口及后端 base URL。
-3. 是由浏览器直连 FastAPI，还是通过前端 dev proxy/生产反代。
-4. API 响应拦截规则：HTTP 200 不等于业务成功，必须检查 `response.code`。
-5. token 存储策略和 XSS/CSRF 风险。
-6. 验证码 data URL 的展示与刷新。
-7. 权限路由、菜单和按钮级控制使用哪些 permission codes。
-8. 后端 CORS 白名单；当前尚未配置。
+### 11.3 前端目录职责
 
-### 11.3 前端首批页面可对应
-
-- 登录页：获取验证码 -> 提交登录 -> 保存/使用 Bearer token。
-- 当前用户页：`GET /users/me`。
-- 用户管理：用户列表、创建、分配角色。
-- 角色管理：角色 CRUD、分配权限。
-- 权限管理：权限 CRUD。
-
-但在做管理 UI 前，应先给后端管理接口补上真实鉴权和权限依赖，否则前端隐藏按钮没有安全意义。
+- `src/pages`：路由级页面与页面内业务交互。
+- `src/services/api.ts`：按 OpenAPI 声明接口调用，不在页面重复拼 URL。
+- `src/services/http.ts`：统一响应、错误和认证头处理。
+- `src/types/api.ts`：与 OpenAPI schema 对应的明确类型。
+- `src/auth`：登录态、当前用户查询和退出。
+- `src/layouts` / `src/components`：后台壳、路由守卫和可复用展示组件。
+- `src/styles/global.css`：当前视觉系统和响应式规则。
 
 ---
 
@@ -677,6 +690,17 @@ uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 - 健康检查：`http://localhost:8000/health`
 - Swagger UI：`http://localhost:8000/docs`
 - ReDoc：`http://localhost:8000/redoc`
+- 前端：`http://localhost:5173`
+
+前端在另一个终端启动：
+
+```bash
+cd app
+npm ci
+npm run dev
+```
+
+`npm ci` 只需在首次拉取或 lockfile 变化后执行。当前基础组件已经全部记录在 `package.json` / `package-lock.json`，日常启动不需要重复安装。
 
 项目当前没有创建首个超级管理员、角色、权限的命令。需要通过公开 API 或直接数据库操作初始化；这本身也是应补齐的安全/运维能力。
 
@@ -695,7 +719,7 @@ pytest 配置：
 
 - `test/test_sample.py`：两个简单加法测试；名为 `test_add_fail` 的测试实际断言正确，会通过。
 - `test/test_jwt.py`：动态 token 往返测试，以及一个写死 token 的测试。
-- `test/test_permission_cache.py`：当前未提交的 12 个异步测试，覆盖双 key 写入、空集合命中、批量失效、请求快照、cache hit/miss、提交后回调，以及用户/角色/权限变更时的双删顺序。
+- `test/test_permission_cache.py`：12 个异步测试，覆盖双 key 写入、空集合命中、批量失效、请求快照、cache hit/miss、提交后回调，以及用户/角色/权限变更时的双删顺序。
 
 2026-07-26 实际验证：
 
@@ -706,33 +730,26 @@ pytest 配置：
 
 在修复依赖清单后，应重新执行完整测试。不要通过关闭 token 过期校验来让硬编码测试通过；应改为测试内动态生成 token，或使用可控时钟。
 
+2026-07-26 新增前端后的验证：
+
+1. `cd app && npm run typecheck`：**通过**。
+2. `cd app && npm run build`：**通过**，Vite 生成可部署的 `dist/`。
+3. 本地浏览器检查登录页：桌面布局、表单和后端不可用异常态正常，浏览器控制台无前端错误。
+4. 构建提示主 JS chunk 大于 500 kB；这是 Ant Design 与页面当前同步打包造成的性能提示，不影响正确性，后续可用路由懒加载和更细粒度拆包优化。
+
 ---
 
 ## 14. 当前 Git 工作区：不要覆盖的未提交改动
 
-文档生成前观察到以下工作区状态。
+2026-07-26 本次前端交付结束前观察到：
 
-已修改文件：
+- 分支 `main`，HEAD `bc31bc0`（`redis 缓存`）。权限缓存与相关测试已经进入当前 Git 基线。
+- `app/` 是本次新增、尚未提交的完整前端工程。
+- `docs/openapi.json` 是用户提供、尚未提交的 API 契约，本次没有修改。
+- `PROJECT_CONTEXT.md` 因本次前端状态更新而有修改。
+- 本次没有修改后端业务源码。
 
-- `src/core/deps.py`
-- `src/infra/database.py`
-- `src/modules/permission/api.py`
-- `src/modules/permission/service.py`
-- `src/modules/role/api.py`
-- `src/modules/role/service.py`
-- `src/modules/user/api.py`
-- `src/modules/user/service.py`
-
-未跟踪文件：
-
-- `src/utils/permission_cache.py`
-- `test/test_permission_cache.py`
-- `AGENTS.md`（当前为空文件）
-- `PROJECT_CONTEXT.md`（本文档）
-
-这些修改共同构成“Redis RBAC 权限缓存 + 关系变更双删 + 提交后回调”功能。后续 AI 在动鉴权、事务、User/Role/Permission service 时，必须先查看 `git diff`，不要把它们当作可丢弃的临时代码。
-
-`app/` 为空目录，所以不出现在 Git 状态中。
+后续 AI 必须重新执行 `git status --short`，以当时工作区为准；不要覆盖 `app/` 或用户后续产生的其他未提交改动。
 
 ---
 
@@ -775,6 +792,9 @@ pytest 配置：
 10. `src/main.py` 有未使用的 `asyncio` 导入，代码中还存在重复 import、格式不统一和教学式注释。
 11. 没有审计日志、操作人记录、软删除、租户隔离。
 12. 没有 API 集成测试；当前权限缓存测试主要依靠 fake DB/Redis。
+13. 前端 access token 当前位于 `localStorage`，存在 XSS 读取风险；迁移到 HttpOnly Cookie 需要后端同步设计 CSRF 防护。
+14. 前端生产构建主 chunk 当前较大，应在页面继续扩展前引入路由级懒加载和拆包策略。
+15. 前端尚无单元测试、端到端测试、lint 和 CI；当前只验证了 TypeScript、生产构建与登录页浏览器冒烟。
 
 ---
 
@@ -834,15 +854,15 @@ src/modules/<module>/
 - 并发一致性策略变更要配套扩充 `test_permission_cache.py`。
 - 不要在 Repository 内偷偷 commit，否则会破坏请求级事务和提交后回调时序。
 
-### 16.5 新增前端
+### 16.5 修改前端
 
-1. 所有文件创建在 `app/`。
-2. 先确定技术栈、包管理器和目录规范，再初始化工程。
-3. 提交至少一个文件（例如 `app/README.md`），保证 Git 能保留目录。
-4. API client 统一处理 `{code,message,data}`。
-5. 配置 dev proxy 或后端 CORS。
-6. 为 token 过期、业务 401/403、原生 HTTP 401/422 都设计处理逻辑。
-7. 不要在前端复制后端 JWT secret 或数据库/Redis 凭据。
+1. 所有前端文件继续保留在 `app/`，先阅读 `app/README.md` 和相关 page/service。
+2. 新接口先在 `src/types/api.ts` 定义类型，再集中加入 `src/services/api.ts`；不要在页面散落 Axios 调用。
+3. 所有统一包装接口使用 `request<T>`，只有 `/health` 这类原始响应才使用 `requestRaw<T>`。
+4. mutation 成功后按资源前缀失效 TanStack Query 缓存，确保列表、统计和关联选择同步更新。
+5. 新页面需要放到受保护路由和 `AppLayout` 导航中，并同时检查窄屏布局。
+6. 后端 OpenAPI 变化时同步更新类型、表单、请求形状和本文档；不能只修 UI。
+7. 不要在前端复制后端 JWT secret、数据库/Redis 凭据或真实用户密码。
 
 ### 16.6 修改配置或依赖
 
@@ -859,7 +879,7 @@ src/modules/<module>/
 
 1. 阅读本文档，但以当前源码和 `git diff` 为最终事实。
 2. 运行 `git status --short`，保护用户未提交改动。
-3. 牢记 `app/` 是全部前端范围；当前无现成前端。
+3. 牢记 `app/` 是全部前端范围；当前已有 React/Vite 工程，不要重复初始化或换技术栈。
 4. 判断任务属于 API、service、repository、model/schema、基础设施还是前端，不要跨层堆逻辑。
 5. 若涉及鉴权，先核对接口当前是否真的挂了依赖。
 6. 若涉及 User-Role-Permission 关系，检查 Redis 双 key 失效和事务时序。
@@ -889,7 +909,7 @@ src/modules/<module>/
 5. 增加安全的首个管理员/RBAC 初始化流程。
 6. 统一错误状态和响应契约，修复角色异常构造、用户角色 API 形状。
 7. 增加 API 集成测试，覆盖 MySQL/Redis 事务与权限绕过。
-8. 再在 `app/` 初始化前端，并同步配置 CORS/proxy 和统一 API client。
+8. 让现有 `app/` 与加固后的鉴权接口完成真实联调，并增加前端单测、端到端测试、路由懒加载和生产部署配置。
 9. 最后清理未使用的 MinIO/Playwright 依赖，或在真实业务出现时正式接入。
 
 这份顺序不是业务需求；它是基于当前代码安全性、可运行性和后续修改成本给出的工程建议。
